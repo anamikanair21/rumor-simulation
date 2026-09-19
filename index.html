@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISR Rumor Propagation Interactive Simulator</title>
+    <!-- Plotly.js for interactive rendering -->
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #f8fafc;
+            color: #1e293b;
+        }
+        .header {
+            background-color: #1e3a8a;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .header h1 { margin: 0 0 5px 0; font-size: 22px; }
+        .header p { margin: 0; font-size: 14px; opacity: 0.9; }
+        .container {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            width: 320px;
+            flex-shrink: 0;
+        }
+        .plot-area {
+            flex-grow: 1;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            min-width: 450px;
+        }
+        .slider-group {
+            margin-bottom: 18px;
+        }
+        label {
+            font-weight: 600;
+            display: block;
+            margin-bottom: 5px;
+            font-size: 13px;
+        }
+        input[type=range] {
+            width: 100%;
+            cursor: pointer;
+        }
+        .val-box {
+            color: #2563eb;
+            font-weight: bold;
+            float: right;
+        }
+        .metrics-card {
+            margin-top: 20px;
+            padding: 15px;
+            background: #eff6ff;
+            border-left: 4px solid #2563eb;
+            border-radius: 4px;
+        }
+        .metrics-card h4 { margin: 0 0 10px 0; color: #1e40af; font-size: 15px; }
+        .metrics-card p { margin: 4px 0; font-size: 13px; }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        .pass { background-color: #dcfce7; color: #15803d; }
+        .fail { background-color: #fee2e2; color: #b91c1c; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>ISR Rumor Propagation Interactive Decision Simulator</h1>
+        <p><b>Student Name:</b> ANAMIKA D NAIR | <b>Reg No:</b> 2540310 | <b>Class:</b> 3BScPMa</p>
+    </div>
+
+    <div class="container">
+        <div class="controls">
+            <h3>Parameter Sliders</h3>
+            
+            <div class="slider-group">
+                <label>Total Population (N): <span id="valN" class="val-box">500</span></label>
+                <input type="range" id="paramN" min="100" max="2000" value="500" step="50" oninput="updateSimulation()">
+            </div>
+
+            <div class="slider-group">
+                <label>Transmission Rate (&beta;): <span id="valBeta" class="val-box">0.0020</span></label>
+                <input type="range" id="paramBeta" min="0.0005" max="0.0100" value="0.0020" step="0.0001" oninput="updateSimulation()">
+            </div>
+
+            <div class="slider-group">
+                <label>Stifling Rate (&mu;): <span id="valMu" class="val-box">0.0010</span></label>
+                <input type="range" id="paramMu" min="0.0001" max="0.0080" value="0.0010" step="0.0001" oninput="updateSimulation()">
+            </div>
+
+            <div class="slider-group">
+                <label>Spontaneous Decay (&alpha;): <span id="valAlpha" class="val-box">0.0500</span></label>
+                <input type="range" id="paramAlpha" min="0.0000" max="0.2000" value="0.0500" step="0.0050" oninput="updateSimulation()">
+            </div>
+
+            <div class="metrics-card">
+                <h4>Analytical & Numerical Outputs</h4>
+                <p>Analytical Peak Ignorants (I<sub>peak</sub>): <b id="outIpeak">-</b></p>
+                <p>Max Active Spreaders (S<sub>max</sub>): <b id="outSmax">-</b></p>
+                <p>Time to Peak (t<sub>peak</sub>): <b id="outTpeak">-</b> hours</p>
+                <div id="policyStatus" class="status-badge pass">Policy Target Compliant</div>
+            </div>
+        </div>
+
+        <div class="plot-area">
+            <div id="plotlyChart" style="width:100%; height:520px;"></div>
+        </div>
+    </div>
+
+    <script>
+        function runEulerSolver(N, beta, mu, alpha) {
+            let I = N - 1, S = 1, R = 0;
+            let dt = 0.02, tMax = 48;
+            let tArr = [], iArr = [], sArr = [], rArr = [];
+            
+            let sMax = 1, iAtPeak = I, tPeak = 0;
+
+            for (let t = 0; t <= tMax; t += dt) {
+                tArr.push(t.toFixed(2));
+                iArr.push(I);
+                sArr.push(S);
+                rArr.push(R);
+
+                if (S > sMax) {
+                    sMax = S;
+                    iAtPeak = I;
+                    tPeak = t;
+                }
+
+                // Numerical derivatives
+                let dI = -beta * I * S;
+                let dS = beta * I * S - mu * S * (S + R) - alpha * S;
+                let dR = mu * S * (S + R) + alpha * S;
+
+                I += dI * dt;
+                S += dS * dt;
+                R += dR * dt;
+            }
+
+            return { tArr, iArr, sArr, rArr, sMax, iAtPeak, tPeak };
+        }
+
+        function updateSimulation() {
+            let N = parseFloat(document.getElementById('paramN').value);
+            let beta = parseFloat(document.getElementById('paramBeta').value);
+            let mu = parseFloat(document.getElementById('paramMu').value);
+            let alpha = parseFloat(document.getElementById('paramAlpha').value);
+
+            document.getElementById('valN').innerText = N;
+            document.getElementById('valBeta').innerText = beta.toFixed(4);
+            document.getElementById('valMu').innerText = mu.toFixed(4);
+            document.getElementById('valAlpha').innerText = alpha.toFixed(4);
+
+            let res = runEulerSolver(N, beta, mu, alpha);
+
+            // Analytical I_peak formula calculation
+            let analyticalIpeak = (mu * N + alpha) / (beta + mu);
+
+            document.getElementById('outIpeak').innerText = analyticalIpeak.toFixed(1) + " students";
+            document.getElementById('outSmax').innerText = res.sMax.toFixed(1) + " students";
+            document.getElementById('outTpeak').innerText = res.tPeak.toFixed(1);
+
+            let targetThreshold = 0.30 * N;
+            let badge = document.getElementById('policyStatus');
+            if (res.sMax <= targetThreshold) {
+                badge.innerText = "POLICY COMPLIANT (S_max ≤ 30%)";
+                badge.className = "status-badge pass";
+            } else {
+                badge.innerText = "POLICY EXCEEDED (S_max > 30%)";
+                badge.className = "status-badge fail";
+            }
+
+            let traceI = { x: res.tArr, y: res.iArr, name: 'Ignorants I(t)', line: {color: '#2563eb', width: 2} };
+            let traceS = { x: res.tArr, y: res.sArr, name: 'Spreaders S(t)', line: {color: '#dc2626', width: 3} };
+            let traceR = { x: res.tArr, y: res.rArr, name: 'Stiflers R(t)', line: {color: '#16a34a', width: 2} };
+            let traceLimit = { 
+                x: [0, 48], 
+                y: [targetThreshold, targetThreshold], 
+                name: '30% Policy Limit (' + targetThreshold + ')', 
+                line: {color: '#000000', dash: 'dash', width: 2} 
+            };
+
+            let layout = {
+                title: 'Real-Time ISR Model Trajectory Dynamics',
+                xaxis: { title: 'Time (Hours)' },
+                yaxis: { title: 'Number of Students' },
+                hovermode: 'x unified'
+            };
+
+            Plotly.newPlot('plotlyChart', [traceI, traceS, traceR, traceLimit], layout);
+        }
+
+        // Run on page load
+        updateSimulation();
+    </script>
+</body>
+</html>
